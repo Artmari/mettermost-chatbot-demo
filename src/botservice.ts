@@ -37,6 +37,8 @@ const botInstructions = "Your name is " + name + ". " + additionalBotInstruction
 botLog.debug({botInstructions: botInstructions})
 
 async function onClientMessage(msg: WebSocketMessage<JSONMessageData>, meId: string) {
+    botLog.log("onClientMessage", msg, meId);
+    
     if (msg.event !== 'posted' || !meId) {
         matterMostLog.debug({msg: msg})
         return
@@ -48,6 +50,19 @@ async function onClientMessage(msg: WebSocketMessage<JSONMessageData>, meId: str
     if (isMessageIgnored(msgData, meId, posts)) {
         return
     }
+
+    try {
+        await mmClient.createPost({
+            message: "Hi!",
+            channel_id: msgData.post.channel_id,
+            root_id: msgData.post.id,
+        })
+        botLog.log("DONE");
+    } catch(e) {
+        botLog.log("ERROR", e);
+    }
+
+    return;
 
     const chatmessages: ChatCompletionRequestMessage[] = [
         {
@@ -114,29 +129,33 @@ async function onClientMessage(msg: WebSocketMessage<JSONMessageData>, meId: str
  */
 function isMessageIgnored(msgData: MessageData, meId: string, previousPosts: Post[]): boolean {
     // we are not in a thread and not mentioned
+    botLog.log("is1", msgData.post.root_id === '' && !msgData.mentions.includes(meId))
     if (msgData.post.root_id === '' && !msgData.mentions.includes(meId)) {
         return true
     }
 
     // it is our own message
+    botLog.log("is2", msgData.post.user_id === meId)
     if (msgData.post.user_id === meId) {
         return true
     }
 
-    for (let i = previousPosts.length - 1; i >= 0; i--) {
-        // we were asked to stop participating in the conversation
-        if (previousPosts[i].props.bot_status === 'stopped') {
-            return true
-        }
+    return false;
 
-        if (previousPosts[i].user_id === meId || previousPosts[i].message.includes(name)) {
-            // we are in a thread were we are actively participating, or we were mentioned in the thread => respond
-            return false
-        }
-    }
+    // for (let i = previousPosts.length - 1; i >= 0; i--) {
+    //     // we were asked to stop participating in the conversation
+    //     if (previousPosts[i].props.bot_status === 'stopped') {
+    //         return true
+    //     }
 
-    // we are in a thread but did not participate or got mentioned - we should ignore this message
-    return true
+    //     if (previousPosts[i].user_id === meId || previousPosts[i].message.includes(name)) {
+    //         // we are in a thread were we are actively participating, or we were mentioned in the thread => respond
+    //         return false
+    //     }
+    // }
+
+    // // we are in a thread but did not participate or got mentioned - we should ignore this message
+    // return true
 }
 
 /**
@@ -214,12 +233,15 @@ async function userIdToName(userId: string): Promise<string> {
 async function main(): Promise<void> {
     const meId = (await mmClient.getMe()).id
 
-    botLog.log("Connected to Mattermost.")
+    botLog.log("Connected to Mattermost2.")
 
     for (const plugin of plugins) {
         if (plugin.setup()) {
+            botLog.log("PLUGIN true")
             registerChatPlugin(plugin)
             botLog.trace("Registered plugin " + plugin.key)
+        } else {
+            botLog.log("PLUGIN false")
         }
     }
 
